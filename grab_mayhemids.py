@@ -7,8 +7,8 @@ from aiohttp import ClientResponseError, ClientPayloadError, ClientConnectorErro
 from xml.etree import ElementTree as ET
 
 # Define the range for applicationUserId
-START_ID = 10619000000
-END_ID = 10000000000
+START_ID = 8000000000
+END_ID = 8001000000
 
 # Maximum concurrent requests and retries
 MAX_CONCURRENT_REQUESTS = 25000
@@ -24,14 +24,15 @@ def load_existing_files():
     """Load existing XML files into a dictionary for fast lookup."""
     global existing_files_dict
     # Store the file as a dictionary with applicationUserId as the key
-    for fn in os.listdir("."):
-        if fn.endswith(".xml"):
-            try:
-                # Extract applicationUserId from the filename and add to the dictionary
-                app_user_id = fn.split("_")[1]  # Assumes filename format: applicationUserId_123_mayhemId_456.xml
-                existing_files_dict[app_user_id] = fn
-            except IndexError:
-                continue  # Skip files that don't follow the expected naming pattern
+    for root, _, files in os.walk("."):
+        for fn in files:
+            if fn.endswith(".xml"):
+                try:
+                    # Extract applicationUserId from the filename and add to the dictionary
+                    app_user_id = fn.split("_")[1]  # Assumes filename format: applicationUserId_123_mayhemId_456.xml
+                    existing_files_dict[app_user_id] = os.path.join(root, fn)
+                except IndexError:
+                    continue  # Skip files that don't follow the expected naming pattern
 
 async def fetch_user_data(session, applicationUserId, retries=MAX_RETRIES):
     # Check if the file already exists (skip if it does)
@@ -66,9 +67,14 @@ async def fetch_user_data(session, applicationUserId, retries=MAX_RETRIES):
                     # Extract mayhemId from the URI
                     uri = root.find('URI').text
                     mayhem_id = uri.split('/')[-1]
-                    
-                    # Save the response to a file
-                    filename = f"applicationUserId_{applicationUserId}_mayhemId_{mayhem_id}.xml"
+
+                    # Define a directory path based on the prefix of applicationUserId
+                    prefix = str(applicationUserId)[:4]  # Use first 4 digits as prefix
+                    directory = os.path.join(".", prefix)
+                    os.makedirs(directory, exist_ok=True)
+
+                    # Save the response to a file in the prefixed directory
+                    filename = os.path.join(directory, f"applicationUserId_{applicationUserId}_mayhemId_{mayhem_id}.xml")
                     async with aiofiles.open(filename, 'w') as file:
                         await file.write(content)
                     print(f"Saved: {filename}")
@@ -127,7 +133,7 @@ async def main():
     load_existing_files()
 
     # Process users in batches
-    batch_size = 1000  # Process 100 users per batch
+    batch_size = 1000  # Process 1000 users per batch
     for start_id in range(START_ID, END_ID + 1, batch_size):
         end_id = min(start_id + batch_size - 1, END_ID)
         print(f"Processing users {start_id} to {end_id}")
